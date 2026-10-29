@@ -1,0 +1,397 @@
+name: Build AI-Bouclier v2.0 Futuristic APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-futuristic-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Generate Complete Android Project
+        run: |
+          python3 - << 'EOF'
+          import os, textwrap
+
+          files = {
+              "settings.gradle.kts": """
+                  pluginManagement {
+                      repositories {
+                          google()
+                          mavenCentral()
+                          gradlePluginPortal()
+                      }
+                  }
+                  dependencyResolutionManagement {
+                      repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+                      repositories {
+                          google()
+                          mavenCentral()
+                      }
+                  }
+                  rootProject.name = "AIBouclier"
+                  include(":app")
+              """,
+
+              "build.gradle.kts": """
+                  plugins {
+                      id("com.android.application") version "8.5.2" apply false
+                      id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+                  }
+              """,
+
+              "gradle.properties": """
+                  org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+                  android.useAndroidX=true
+                  kotlin.code.style=official
+                  android.nonTransitiveRClass=true
+              """,
+
+              "app/build.gradle.kts": """
+                  plugins {
+                      id("com.android.application")
+                      id("org.jetbrains.kotlin.android")
+                  }
+
+                  android {
+                      namespace = "com.shield.aibouclier"
+                      compileSdk = 34
+
+                      defaultConfig {
+                          applicationId = "com.shield.aibouclier"
+                          minSdk = 26
+                          targetSdk = 34
+                          versionCode = 2
+                          versionName = "2.0.0-FUTURISTIC"
+                      }
+
+                      buildTypes {
+                          release {
+                              isMinifyEnabled = false
+                          }
+                      }
+                      compileOptions {
+                          sourceCompatibility = JavaVersion.VERSION_17
+                          targetCompatibility = JavaVersion.VERSION_17
+                      }
+                      kotlinOptions {
+                          jvmTarget = "17"
+                      }
+                      buildFeatures {
+                          compose = true
+                      }
+                      composeOptions {
+                          kotlinCompilerExtensionVersion = "1.5.14"
+                      }
+                  }
+
+                  dependencies {
+                      val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
+                      implementation(composeBom)
+                      implementation("androidx.core:core-ktx:1.13.1")
+                      implementation("androidx.activity:activity-compose:1.9.0")
+                      implementation("androidx.compose.ui:ui")
+                      implementation("androidx.compose.material3:material3")
+                      implementation("androidx.compose.animation:animation")
+                      implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
+                      implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+                      implementation("org.tensorflow:tensorflow-lite:2.16.1")
+                      implementation("androidx.work:work-runtime-ktx:2.9.0")
+                  }
+              """,
+
+              "app/src/main/AndroidManifest.xml": """
+                  <?xml version="1.0" encoding="utf-8"?>
+                  <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+                      package="com.shield.aibouclier">
+
+                      <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+                      <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+                      <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+                      <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+                      <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+                      <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+                      <uses-permission android:name="android.permission.INTERNET" />
+                      <uses-permission android:name="android.permission.VIBRATE" />
+
+                      <application
+                          android:allowBackup="false"
+                          android:icon="@android:drawable/ic_lock_idle_lock"
+                          android:label="AI Bouclier"
+                          android:supportsRtl="true"
+                          android:theme="@android:style/Theme.Material.NoActionBar">
+
+                          <activity
+                              android:name=".MainActivity"
+                              android:exported="true">
+                              <intent-filter>
+                                  <action android:name="android.intent.action.MAIN" />
+                                  <category android:name="android.intent.category.LAUNCHER" />
+                              </intent-filter>
+                          </activity>
+
+                          <service
+                              android:name=".AiPhishingShieldService"
+                              android:exported="true"
+                              android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+                              <intent-filter>
+                                  <action android:name="android.service.notification.NotificationListenerService" />
+                              </intent-filter>
+                          </service>
+
+                          <service
+                              android:name=".ZeroLagVpnShield"
+                              android:exported="false"
+                              android:permission="android.permission.BIND_VPN_SERVICE">
+                              <intent-filter>
+                                  <action android:name="android.net.VpnService" />
+                              </intent-filter>
+                          </service>
+
+                          <receiver
+                              android:name=".NewAppInstallReceiver"
+                              android:exported="true">
+                              <intent-filter>
+                                  <action android:name="android.intent.action.PACKAGE_ADDED" />
+                                  <data android:scheme="package" />
+                              </intent-filter>
+                          </receiver>
+
+                      </application>
+                  </manifest>
+              """,
+
+              "app/src/main/java/com/shield/aibouclier/AlertSoundManager.kt": """
+                  package com.shield.aibouclier
+
+                  import android.app.NotificationChannel
+                  import android.app.NotificationManager
+                  import android.content.Context
+                  import android.media.AudioManager
+                  import android.media.ToneGenerator
+                  import android.os.Build
+                  import android.os.VibrationEffect
+                  import android.os.Vibrator
+                  import androidx.core.app.NotificationCompat
+                  import kotlinx.coroutines.*
+
+                  enum class AlertProfile(val id: Int, val titleAr: String, val titleEn: String) {
+                      CYBER_SIREN(0, "إنذار سيبراني قوي (Cyber Siren)", "Cyber Siren (High Alert)"),
+                      TACTICAL_SONAR(1, "نبض رادار تكتيكي (Tactical Sonar)", "Tactical Sonar Pulse"),
+                      STEALTH_HAPTIC(2, "وضع صامت هزاز (Stealth Haptic)", "Stealth Haptic Vibration")
+                  }
+
+                  object AlertSoundManager {
+                      private val scope = CoroutineScope(Dispatchers.Default)
+
+                      fun getSelectedProfile(context: Context): AlertProfile {
+                          val id = context.getSharedPreferences("ai_shield_prefs", Context.MODE_PRIVATE)
+                              .getInt("alert_profile_id", 0)
+                          return AlertProfile.values().firstOrNull { it.id == id } ?: AlertProfile.CYBER_SIREN
+                      }
+
+                      fun setSelectedProfile(context: Context, profile: AlertProfile) {
+                          context.getSharedPreferences("ai_shield_prefs", Context.MODE_PRIVATE)
+                              .edit().putInt("alert_profile_id", profile.id).apply()
+                      }
+
+                      fun triggerTacticalAlert(context: Context, title: String, message: String) {
+                          val profile = getSelectedProfile(context)
+                          playProfileSound(context, profile)
+                          showSystemNotification(context, title, message)
+                      }
+
+                      fun playProfileSound(context: Context, profile: AlertProfile) {
+                          scope.launch {
+                              try {
+                                  val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                                  when (profile) {
+                                      AlertProfile.CYBER_SIREN -> {
+                                          vibrate(vibrator, longArrayOf(0, 250, 100, 250, 100, 400))
+                                          val toneGen = ToneGenerator(AudioManager.STREAM_ALARM, 100)
+                                          repeat(3) {
+                                              toneGen.startTone(ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK, 180)
+                                              delay(220)
+                                              toneGen.startTone(ToneGenerator.TONE_CDMA_HIGH_L, 180)
+                                              delay(220)
+                                          }
+                                          toneGen.release()
+                                      }
+                                      AlertProfile.TACTICAL_SONAR -> {
+                                          vibrate(vibrator, longArrayOf(0, 120, 80, 120))
+                                          val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90)
+                                          toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, 160)
+                                          delay(200)
+                                          toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 200)
+                                          delay(250)
+                                          toneGen.release()
+                                      }
+                                      AlertProfile.STEALTH_HAPTIC -> {
+                                          vibrate(vibrator, longArrayOf(0, 150, 80, 150, 80, 300))
+                                      }
+                                  }
+                              } catch (_: Exception) {}
+                          }
+                      }
+
+                      private fun vibrate(vibrator: Vibrator?, pattern: LongArray) {
+                          if (vibrator == null) return
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                          } else {
+                              @Suppress("DEPRECATION")
+                              vibrator.vibrate(pattern, -1)
+                          }
+                      }
+
+                      private fun showSystemNotification(context: Context, title: String, message: String) {
+                          val channelId = "ai_bouclier_tactical_channel"
+                          val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              val channel = NotificationChannel(
+                                  channelId,
+                                  "AI-Bouclier Tactical Alerts",
+                                  NotificationManager.IMPORTANCE_HIGH
+                              )
+                              nm.createNotificationChannel(channel)
+                          }
+                          val notif = NotificationCompat.Builder(context, channelId)
+                              .setSmallIcon(android.R.drawable.stat_sys_warning)
+                              .setContentTitle(title)
+                              .setContentText(message)
+                              .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+                              .setPriority(NotificationCompat.PRIORITY_HIGH)
+                              .setAutoCancel(true)
+                              .build()
+                          nm.notify(System.currentTimeMillis().toInt(), notif)
+                      }
+                  }
+              """,
+
+              "app/src/main/java/com/shield/aibouclier/LiteRtAiEngine.kt": """
+                  package com.shield.aibouclier
+
+                  import android.content.Context
+                  import org.tensorflow.lite.Interpreter
+                  import java.io.File
+                  import java.io.FileInputStream
+                  import java.nio.ByteBuffer
+                  import java.nio.ByteOrder
+                  import java.nio.MappedByteBuffer
+                  import java.nio.channels.FileChannel
+                  import kotlin.math.ln
+
+                  data class AiScanResult(
+                      val riskProbability: Float,
+                      val detectedTricks: List<String>
+                  )
+
+                  class LiteRtAiEngine(private val context: Context) {
+
+                      private var interpreter: Interpreter? = null
+                      private val maxSequenceLength = 128
+
+                      init {
+                          loadOrReloadModel()
+                      }
+
+                      fun loadOrReloadModel() {
+                          try {
+                              val options = Interpreter.Options().apply {
+                                  setNumThreads(2)
+                                  setUseNNAPI(true)
+                              }
+                              val modelBuffer = loadModelFile()
+                              interpreter?.close()
+                              interpreter = Interpreter(modelBuffer, options)
+                          } catch (_: Exception) {}
+                      }
+
+                      private fun loadModelFile(): MappedByteBuffer {
+                          val updatedModelFile = File(context.filesDir, "updated_shield_model.tflite")
+                          if (updatedModelFile.exists()) {
+                              FileInputStream(updatedModelFile).use { inputStream ->
+                                  return inputStream.channel.map(FileChannel.MapMode.READ_ONLY, 0, updatedModelFile.length())
+                              }
+                          }
+                          val assetFd = context.assets.openFd("shield_url_model.tflite")
+                          FileInputStream(assetFd.fileDescriptor).use { inputStream ->
+                              return inputStream.channel.map(FileChannel.MapMode.READ_ONLY, assetFd.startOffset, assetFd.declaredLength)
+                          }
+                      }
+
+                      fun analyzeDetailed(rawText: String, dynamicBadDomains: Set<String>, isAr: Boolean): AiScanResult {
+                          var score = 0.05f
+                          val tricks = mutableListOf<String>()
+
+                          if (containsZeroWidthChars(rawText)) {
+                              score += 0.45f
+                              tricks.add(if (isAr) "أحرف مخفية لتجاوز الفحص (Zero-Width Obfuscation)" else "Zero-Width Character Obfuscation")
+                          }
+
+                          val cleanText = stripZeroWidthChars(rawText).lowercase()
+
+                          if (cleanText.contains("xn--") || hasMixedScripts(cleanText)) {
+                              score += 0.60f
+                              tricks.add(if (isAr) "تزييف بصري للنطاق (IDN Homograph Attack)" else "IDN Homograph Visual Spoofing")
+                          }
+
+                          val entropy = calculateShannonEntropy(cleanText)
+                          if (entropy >= 4.25f) {
+                              score += 0.35f
+                              tricks.add(if (isAr) "عشوائية توليدية عالية بالذكاء الاصطناعي (Entropy: ${"%.2f".format(entropy)})" else "High AI DGA Entropy (${"%.2f".format(entropy)})")
+                          }
+
+                          if (cleanText.contains(".xyz") || cleanText.contains(".top") || cleanText.contains("bit.ly") || cleanText.contains("@")) {
+                              score += 0.30f
+                              tricks.add(if (isAr) "امتداد نطاق عالي الخطورة أو إعادة توجيه مخفية" else "High-Risk TLD or URL Redirection")
+                          }
+
+                          if (dynamicBadDomains.any { it.isNotBlank() && cleanText.contains(it) }) {
+                              score = 1.0f
+                              tricks.add(if (isAr) "مطابق لقاعدة بيانات التهديدات النشطة" else "Matched Active Threat Intelligence DB")
+                          }
+
+                          val neuralProb = runNeuralInference(cleanText)
+                          val finalScore = (score + neuralProb).coerceAtMost(1.0f)
+
+                          if (tricks.isEmpty() && finalScore < 0.35f) {
+                              tricks.add(if (isAr) "لم يتم رصد أنماط تلاعب خبيثة" else "No adversarial AI patterns detected")
+                          }
+
+                          return AiScanResult(finalScore, tricks)
+                      }
+
+                      fun analyzeThreat(rawText: String, dynamicBadDomains: Set<String>): Float {
+                          return analyzeDetailed(rawText, dynamicBadDomains, true).riskProbability
+                      }
+
+                      private fun runNeuralInference(text: String): Float {
+                          val currentInterpreter = interpreter ?: return 0.10f
+                          return try {
+                              val inputBuffer = ByteBuffer.allocateDirect(maxSequenceLength * 4).order(ByteOrder.nativeOrder())
+                              val bytes = text.toByteArray(Charsets.UTF_8)
+                              for (i in 0 until maxSequenceLength) {
+                                  val token = if (i < bytes.size) (bytes[i].toInt() and 0xFF).toFloat() / 255.0f else 0.0f
+                                  inputBuffer.putFloat(token)
+                              }
+                              inputBuffer.rewind()
+                              val output = Array(1) { FloatArray(1) }
+                              currentInterpreter.run(inputBuffer, output)
+                              output[0][0]
+                          } catch (_: Exception) {
+                              0.08f
+                          }
+                      }
+
+                      private fun containsZeroWidthChars(text: String): Boolean {
+                          val zw = charArrayOf('\u200B', '\u200C', '\u200D', '\uFEFF', '\u2060')
+                          return text.any { it in zw }
+                      }
+
+                      private fun stripZeroWidthChars(text: String): String {
+                      
